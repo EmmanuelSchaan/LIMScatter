@@ -4,7 +4,7 @@ from headers import *
 
 pathInput = "../../data/GOALS/"
 
-pathFig = "./figures/"
+pathFig = "./figures/GOALS/"
 if not os.path.exists(pathFig):
    os.makedirs(pathFig)
 
