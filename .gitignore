@@ -8,6 +8,8 @@
 *.txt
 *.swp
 *.ipynb
+*.fits
+*.list
 
 # directories to exclude
 output/
