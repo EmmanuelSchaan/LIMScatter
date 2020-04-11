@@ -37,6 +37,8 @@ import colormaps as cmaps  # for viridis and plasma colormaps
 # to save wav files
 from scipy.io import wavfile
 
+import itertools
+
 # for faster FFT
 #import pyfftw
 #pyfftw.interfaces.cache.enable() # so subsequent FFTs use the wisdom from the first one
