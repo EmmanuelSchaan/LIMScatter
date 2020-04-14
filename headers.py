@@ -19,6 +19,7 @@ from timeit import timeit
 from time import time
 from copy import copy
 import sys
+import seaborn as sns
 
 # parallelizing "map"
 # version that works when the function is a class module
