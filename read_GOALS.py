@@ -108,7 +108,7 @@ for iLine1 in range(nLines):
          #plt.show()
 
 
-plot = True
+#plot = True
 
 # Save matrix of cov and corr coeff
 path = pathFig + "s2ij.txt"

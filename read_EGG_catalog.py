@@ -42,6 +42,8 @@ for iLine1 in range(nLines):
 # line cov and corr coeff
 s2ij = np.zeros((nLines, nLines))   # s2ij = cov(Li,Lj)/Li/Lj
 rij = np.zeros((nLines, nLines)) # correlation coefficient
+s2ijlog = np.zeros((nLines, nLines))   # s2ij = cov(log10Li,log10Lj)/ log10Li / log10Lj
+rijlog = np.zeros((nLines, nLines)) # correlation coefficient of log10Li
 
 # scatter plot: correlation
 for iLine1 in range(nLines):
@@ -55,6 +57,8 @@ for iLine1 in range(nLines):
       # compute cov and corr coeff
       s2ij[iLine1, iLine2] = np.cov(np.vstack((line1Lum, line2Lum)))[0,1] / np.mean(line1Lum) / np.mean(line2Lum)
       rij[iLine1, iLine2] = np.corrcoef(line1Lum, line2Lum)[0,1]
+      s2ijlog[iLine1, iLine2] = np.cov(np.vstack((np.log10(line1Lum), np.log10(line2Lum))))[0,1] / np.mean(np.log10(line1Lum)) / np.mean(np.log10(line2Lum))
+      rijlog[iLine1, iLine2] = np.corrcoef(np.log10(line1Lum), np.log10(line2Lum))[0,1]
       
       if plot and (iLine1<>iLine2):
          fig=plt.figure(0)
@@ -80,6 +84,14 @@ np.savetxt(path, np.round(s2ij.T, 2), fmt='%.2f', header=header)
 path = pathFig + "rij.txt"
 header = "rij, correlation coefficient of line luminosities\n" + ', '.join(cat['lines'])
 np.savetxt(path, np.round(rij.T, 2), fmt='%.2f', header=header)
+#
+path = pathFig + "s2ijlog10.txt"
+header = "s2ijlog = cov(log10Li, log10Lj) / log10Li / log10Lj [dimless]\n" + ', '.join(cat['lines'])
+np.savetxt(path, np.round(s2ijlog.T, 2), fmt='%.2f', header=header)
+#
+path = pathFig + "rijlog10.txt"
+header = "rijlog, correlation coefficient of the log10 of line luminosities\n" + ', '.join(cat['lines'])
+np.savetxt(path, np.round(rijlog.T, 2), fmt='%.2f', header=header)
 
 plot=True
 
@@ -88,7 +100,8 @@ if plot:
    fig=plt.figure(0, figsize=(18,12))
    ax=fig.add_subplot(111)
    #
-   sns.heatmap(rij.T, annot=True)
+   mask = np.triu(np.ones((nLines, nLines)), k=1)
+   sns.heatmap(rij, annot=True, mask=mask, cbar=False)
    ax.set_xticklabels(cat['lines'].replace('_', ' '), rotation=45)
    ax.set_yticklabels(cat['lines'].replace('_', ' '), rotation=0)
    #
@@ -98,11 +111,27 @@ if plot:
    #plt.show()
 
 
+   # plot correlation matrix in log10
+   fig=plt.figure(0, figsize=(18,12))
+   ax=fig.add_subplot(111)
+   #
+   mask = np.triu(np.ones((nLines, nLines)), k=1)
+   sns.heatmap(rijlog, annot=True, mask=mask, cbar=False)
+   ax.set_xticklabels(cat['lines'].replace('_', ' '), rotation=45)
+   ax.set_yticklabels(cat['lines'].replace('_', ' '), rotation=0)
+   #
+   path = pathFig + "rijlog10.pdf"
+   fig.savefig(path, bbox_inches='tight')
+   fig.clf()
+   #plt.show()
+
+
    # plot relative cov matrix
    fig=plt.figure(0, figsize=(18,12))
    ax=fig.add_subplot(111)
    #
-   sns.heatmap(s2ij.T, annot=True)
+   mask = np.triu(np.ones((nLines, nLines)), k=1)
+   sns.heatmap(s2ij, annot=True, mask=mask, cbar=False)
    ax.set_xticklabels(cat['lines'].replace('_', ' '), rotation=45)
    ax.set_yticklabels(cat['lines'].replace('_', ' '), rotation=0)
    #
@@ -112,30 +141,18 @@ if plot:
    #plt.show()
 
 
-#if plot:
-#   # plot correlation matrix
-#   fig=plt.figure(0, figsize=(14,10))
-#   ax=fig.add_subplot(111)
-#   #
-#   sns.heatmap(rij.T, annot=True)
-#   ax.set_xticklabels(lines, rotation=45)
-#   ax.set_yticklabels(lines)
-#   #
-#   path = pathFig + "rij.pdf"
-#   fig.savefig(path, bbox_inches='tight')
-#   fig.clf()
-#   #plt.show()
-#
-#   # plot relative cov matrix
-#   fig=plt.figure(0, figsize=(14,10))
-#   ax=fig.add_subplot(111)
-#   #
-#   sns.heatmap(s2ij.T, annot=True)
-#   ax.set_xticklabels(lines, rotation=45)
-#   ax.set_yticklabels(lines)
-#   #
-#   path = pathFig + "s2ij.pdf"
-#   fig.savefig(path, bbox_inches='tight')
-#   fig.clf()
-#   #plt.show()
-#
+   # plot relative cov matrix in log10
+   fig=plt.figure(0, figsize=(18,12))
+   ax=fig.add_subplot(111)
+   #
+   mask = np.triu(np.ones((nLines, nLines)), k=1)
+   sns.heatmap(s2ijlog, annot=True, mask=mask, cbar=False)
+   ax.set_xticklabels(cat['lines'].replace('_', ' '), rotation=45)
+   ax.set_yticklabels(cat['lines'].replace('_', ' '), rotation=0)
+   #
+   path = pathFig + "s2ijlog10.pdf"
+   fig.savefig(path, bbox_inches='tight')
+   fig.clf()
+   #plt.show()
+
+
