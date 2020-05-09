@@ -52,8 +52,8 @@ import itertools
 #from classy import Class
 
 # http://classylss.readthedocs.io/en/stable/index.html
-#import classylss
-#import classylss.binding as CLASS
+import classylss
+import classylss.binding as CLASS
 
 ##################################################################################
 # for pretty plots
