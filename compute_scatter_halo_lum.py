@@ -23,8 +23,8 @@ if not os.path.exists(pathFig):
 u = UnivPlanck15()
 
 #massFunc = MassFuncPS(u, nProc=nProc, save=True)
-#massFunc = MassFuncST(u, nProc=nProc, save=True)
-massFunc = MassFuncTinker(u, nProc=nProc, save=False)
+massFunc = MassFuncST(u, nProc=nProc, save=False)
+#massFunc = MassFuncTinker(u, nProc=nProc, save=False)
 
 
 
@@ -45,7 +45,7 @@ def sfr(m, z):
    '''
 
    # bounds for the fitting function
-   if z<=0. or z>=5.:
+   if z<0. or z>5.:
       return 0.
 
    # Table I 
@@ -67,6 +67,7 @@ def sfr(m, z):
    
    # below Eq 11
    Ma = 1.e8   # [Msun]
+
    # Eq 11
    result = fM0(z) * (m/Ma)**fa(z) * (1.+m/fMb(z))**fb(z) * (1.+m/fMc(z))**fc(z)
    return result
@@ -141,6 +142,7 @@ fig.clf()
 
 
 
+#####################################################################################
 #####################################################################################
 # Lyman-alpha 121.6 nm
 
@@ -347,8 +349,11 @@ def relativeVarHaloMass(z):
    result = meanHaloMassSquared(z) / meanHaloMass(z)**2 - 1.
    return result
 
-def meanSfr(z):
-   return haloAverage(z, lambda m: sfr(m * u.bg.h, z))
+def meanSfr(z, alpha=1):
+   '''Computes <SFR^alpha>,
+   where the average is over the halo mass function.
+   '''
+   return haloAverage(z, lambda m: sfr(m * u.bg.h, z)**alpha)
 
 
 def meanSfrSquared(z):
@@ -357,7 +362,7 @@ def meanSfrSquared(z):
 def relativeVarHaloSfr(z):
    '''
    '''
-   result = meanSfrSquared(z) / meanSfr(z)**2 - 1.
+   result = meanSfr(z, alpha=2) / meanSfr(z)**2 - 1.
    return result
 
 
@@ -480,9 +485,76 @@ fig.clf()
 
 
 
+#####################################################################################
+# Correlation of the halo line noise
+# if two lines scale as SFR to the same power, then the halo line noises
+# are 100% correlated.
+# In the literature, slightly different scalings are given for the line luminosities
+# as a function of SFR.
+# Here, I give the correlation coefficients for several line combinations.
+
+
+# NII 122mu
+# Fonseca+16, from Spinoglio+12
+gNII = 1.01 # +/- 0.04
+
+# NIII 58mu
+# Fonseca+16, from Spinoglio+12
+gNIII = 0.78 # +/- 0.10
+
+# CII 158mu
+# Finseca+16, from de Looze+11
+gCII = 1.02
+
+# CO transitions lower than 4-3
+# Fonseca+16, from Sargent+14
+gCOLow = 0.81
+# CO transitions 4-3 and higher
+# Finseca+16, from Liu+15
+gCOHigh = 1.
 
 
 
+#lines = ['Lya', 'Ha', 'Hb', 'OIII5007', 'NII122', 'NIII58', 'CII158', 'COLow', 'COHigh']
+#gamma = [1., 1., 1., 1., 1.01, 0.78, 1.02, 0.81, 1.]
+lines = ['NII122', 'NIII58', 'CII158', 'COLow', 'COHigh']
+gamma = [1.01, 0.78, 1.02, 0.81, 1.]
+
+z = np.linspace(0., 5., 6)
+s2ijh = np.zeros((len(lines), len(lines), len(Z)))
+rijh = np.zeros((len(lines), len(lines), len(Z)))
 
 
 
+# compute the covariance matrix
+# of the halo line luminosities
+for iLine1 in range(len(lines)):
+   g1 = gamma[iLine1]
+   for iLine2 in range(len(lines)):
+      g2 = gamma[iLine2]
+
+      f = lambda z: meanSfr(z, alpha=g1+g2) / meanSfr(z, alpha=g1) / meanSfr(z, alpha=g2) - 1.
+      s2ijh[iLine1, iLine2, :] = np.array(map(f, Z))
+
+
+# compute correlation coefficient
+# of the halo line luminosities
+for iZ in range(len(Z)):
+   s = np.sqrt(np.diag(s2ijh[:,:,iZ]))
+   rijh[:,:,iZ] = s2ijh[:,:,iZ] / np.outer(s,s)
+
+
+fig=plt.figure(0)
+ax=fig.add_subplot(111)
+#
+for iLine1 in range(len(lines)):
+   line1 = lines[iLine1]
+   for iLine2 in range(iLine1,len(lines)):
+      line2 = lines[iLine2]
+      ax.plot(Z, rijh[iLine1, iLine2], label=line1+', '+line2)
+#
+ax.legend(loc=3, fontsize='x-small', labelspacing=0.1, handlelength=0.1, ncol=2)
+ax.set_ylim((0.92, 1.001))
+fig.savefig(pathFig+"rijh.pdf", bbox_inches='tight')
+
+plt.show()
