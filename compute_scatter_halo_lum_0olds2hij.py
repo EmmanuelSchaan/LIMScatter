@@ -23,7 +23,7 @@ if not os.path.exists(pathFig):
 u = UnivPlanck15()
 
 #massFunc = MassFuncPS(u, nProc=nProc, save=True)
-massFunc = MassFuncST(u, nProc=nProc, save=False)
+massFunc = MassFuncST(u, nProc=nProc, save=True)
 #massFunc = MassFuncTinker(u, nProc=nProc, save=True)
 
 
@@ -34,11 +34,9 @@ massFunc = MassFuncST(u, nProc=nProc, save=False)
 
 #####################################################################################
 #####################################################################################
-# SFR, SFRD and effective halo mass cutoff
+# SPHEREx lines:
+#Ha, Hb, Lya, OIII 5007A
 
-
-#####################################################################################
-# SFR
 
 def sfr(m, z):
    ''' SFR [Msun/yr] as a function of halo mass [Msun] and redshift
@@ -97,9 +95,6 @@ def sfr(m, z):
 #sfr = interp1d(Z, Sfr, kind='linear', bounds_error=False, fill_value=0.)
 
 
-#####################################################################################
-# SFRD
-
 def sfrd(z):
    '''SFR density:
    \int dm dn/dm SFR(m) [Msun / yr / Mpc^3]
@@ -144,149 +139,10 @@ fig.clf()
 '''
 
 
-#####################################################################################
-# Effective halo mass cutoff from SFR
-
-
-def haloMassIntegral(z, f=lambda m: 1., mMin=None):
-   '''Compute int dm dn/dm f(m)  [(f unit) / (Mpc/h)^3]
-   m [Msun/h]
-   '''
-   if mMin is None:
-      mMin = massFunc.mMin
-
-   def integrand(lnm):
-      m = np.exp(lnm)
-      return m * massFunc.fmassfunc(m, 1./(1.+z)) * f(m)
-   result = integrate.quad(integrand, np.log(mMin), np.log(massFunc.mMax), epsabs=0., epsrel=1.e-3)[0]
-   return result
-
-
-def haloShotNoiseWindow(m, z, mMin=None):
-   '''m [Msun/h]
-   returns:
-   dn/dm * SFR(m)  /  int dm' dn/dm' SFR(m') [1/(Msun/h)]
-   '''
-   result = massFunc.fmassfunc(m, 1./(1.+z))
-   result *= sfr(m * u.bg.h, z)
-   result /= haloMassIntegral(z, lambda m: sfr(m * u.bg.h, z), mMin=mMin)
-   return result
-
-def dHaloShotNoisedM(m, z, mMin=None):
-   '''d(1/n_{h eff}) / dm  [1/(Msun/h)]
-   m [Msun/h]
-   '''
-   result = 1. / massFunc.fmassfunc(m, 1./(1.+z))
-   result *= haloShotNoiseWindow(m, z, mMin=mMin)**2
-   return result
-
-def nHaloEff(z, mMin=None):
-   '''
-   computes \bar{n}^{h eff} [1/(Mpc/h)^3]
-   m [Msun/h]
-   '''
-   result = haloMassIntegral(z, lambda m: sfr(m * u.bg.h, z), mMin=mMin)**2
-   result /= haloMassIntegral(z, lambda m: sfr(m * u.bg.h, z)**2, mMin=mMin)
-   return result
-
-
-
-
-
-# Contributions of each halo mass to the 1-halo term
-M = np.logspace(np.log10(1.e8), np.log10(1.e16), 101, 10.) # masses in h^-1 solarM
-
-fig=plt.figure(0)
-ax=fig.add_subplot(111)
-#
-Z = np.linspace(0., 5., 6)
-for iZ in range(len(Z)):
-   z = Z[iZ]
-   f = lambda m: dHaloShotNoisedM(m, z)
-   dP1hdm = np.array(map(f, M))
-   ax.plot(M, M * dP1hdm, c=plt.cm.autumn_r(iZ/(len(Z)-1.)), label=r'$z=$'+str(int(z)))
-#
-ax.legend(loc=1, labelspacing=0.2)
-ax.set_xscale('log', nonposx='clip')
-ax.set_xlim((1.e10, 4.e14))
-ax.set_xlabel(r'halo mass $m$ [$M_\odot/h$]')
-ax.set_ylabel(r'$\frac{d}{d\text{ln} m}\left( \frac{1}{\bar{n}^\text{h eff}} \right) \propto \frac{dP^\text{1-halo}}{d\text{ln} m}$ [(Mpc/h)$^{-3}$]')
-#
-fig.savefig(pathFig+"dp1hdm.pdf", bbox_inches='tight')
-plt.show()
-fig.clf()
-
 
 
 
 #####################################################################################
-# Effective mean halo number density, and number per voxel
-
-Z = np.linspace(0., 5., 6)
-
-# SPHEREx voxel size
-# the spectral resolution power is R=40 for the lower z, and 150 for the high z
-R = 40.
-# hence the redshift size of the voxel
-dz = (1. + Z) / R
-# and the comoving depth of the voxel
-dChi = dz * 3.e5 / u.hubble(z)   # [Mpc/h]
-# angular pixel size: 6.2 arcsec
-thetaPix = 6.2 * np.pi/(180.*3600.)
-# hence the voxel comoving volume
-vVoxSpherex = (u.bg.comoving_distance(z) * thetaPix)**2 * dChi  # [(Mpc/h)^3]
-
-
-# Effective number density of halos
-NHaloEff = np.array(map(nHaloEff, Z))
-
-
-
-'''
-fig=plt.figure(0)
-ax=fig.add_subplot(111)
-#
-ax.plot(Z, NHaloEff)
-#
-#ax.set_yscale('log', nonposy='clip')
-ax.set_xlabel(r'$z$')
-ax.set_ylabel(r'$\bar{n}^\text{h eff}$ [(Mpc/h)$^3$]')
-#
-fig.savefig(pathFig+"nheff.pdf", bbox_inches='tight')
-plt.show()
-fig.clf()
-'''
-
-
-fig=plt.figure(0)
-ax=fig.add_subplot(111)
-#
-#ax.plot(Z, vVoxSpherex)
-#ax.plot(Z, NHaloEff)
-ax.plot(Z, NHaloEff * vVoxSpherex)
-#
-ax.set_yscale('log', nonposy='clip')
-ax.set_xlabel(r'$z$')
-ax.set_ylabel(r'$\bar{N}^\text{h eff}$ per SPHEREx voxel')
-#
-fig.savefig(pathFig+"halo_sparsity_spherex.pdf", bbox_inches='tight')
-plt.show()
-fig.clf()
-
-
-
-
-
-
-
-
-#####################################################################################
-#####################################################################################
-# SPHEREx lines:
-#Ha, Hb, Lya, OIII 5007A
-
-
-
 #####################################################################################
 # Lyman-alpha 121.6 nm
 
@@ -447,7 +303,7 @@ def luminosityOIII5007(m, z):
 #####################################################################################
 #####################################################################################
 # Halo mass and SFR scatter as a function of redshift
-'''
+
 
 def nHalo(z, mMin=None):
    '''Mean number density of halos of all masses, at redshift z
@@ -668,7 +524,7 @@ ax.set_yscale('log', nonposy='clip')
 fig.savefig(pathFig + "nhalo_voxel_spherex.pdf", bbox_inches='tight')
 plt.show()
 fig.clf()
-'''
+
 
 
 
