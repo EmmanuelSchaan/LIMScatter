@@ -1,15 +1,15 @@
-
-
 # Script to generate the mock catalog using EGG
 
 
 # generate the catalog using EGG:
-egg-gencat verbose maglim=27 selection_band=hst-f160w area=0.08 out=./output/EGG/catalog_EGG.fits
+#egg-gencat verbose maglim=27 selection_band=hst-f160w area=0.08 out=./output/EGG/catalog_EGG.fits
 # get the output in an ASCII file
 #egg-gencat verbose maglim=27 selection_band=hst-f160w area=0.08 out=./output/EGG/catalog_EGG.fits ascii
 
-
-
+# Selection relevant for LIM
+#egg-gencat verbose area=10. mmin=9 mmax=13 zmin=0.05 zmax=10 out=./output/EGG/catalog_EGG_LIM.fits
+# remove unwanted output which make the file too big
+egg-gencat verbose area=10. mmin=9 mmax=13 zmin=0.05 zmax=10 no_pos no_clust out=./output/EGG/catalog_EGG_LIM.fits
 
 
 ## For visualization with SkyMaker
@@ -22,13 +22,13 @@ egg-gencat verbose maglim=27 selection_band=hst-f160w area=0.08 out=./output/EGG
 
 
 # Input parameters for egg-gencat
-#area
+#area # [sq deg]
 #maglim
 #selection_band
-#mmin
-#mmax
-#zmin
-#zmax
+#mmin # to be specified as log10(Mmin/Msun). This disables the limiting magnitude
+#mmax # to be specified as log10(Mmin/Msun)
+#zmin # default is z=0.05
+#zmax # default is z=10.5
 #save_sed to save the full SED of each galaxy
 #ascii
 

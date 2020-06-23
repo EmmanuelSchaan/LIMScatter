@@ -8,6 +8,10 @@ import mass_function
 reload(mass_function)
 from mass_function import *
 
+import profile
+reload(profile)
+from profile import *
+
 
 nProc = 4
 
@@ -22,9 +26,9 @@ if not os.path.exists(pathFig):
 
 u = UnivPlanck15()
 
-#massFunc = MassFuncPS(u, nProc=nProc, save=True)
+#massFunc = MassFuncPS(u, nProc=nProc, save=False)
 massFunc = MassFuncST(u, nProc=nProc, save=False)
-#massFunc = MassFuncTinker(u, nProc=nProc, save=True)
+#massFunc = MassFuncTinker(u, nProc=nProc, save=False)
 
 
 
@@ -76,26 +80,6 @@ def sfr(m, z):
 
 
 
-#''' SFR [Msun/yr] as a function of halo mass [Msun] and redshift
-#from Fonseca+16 (1607.05288v2), Eq 11.
-#I inferred the units from Eq 9 and 11.
-#'''
-## Table I 
-#Z = np.array([0., 1., 2., 3., 4., 5.])
-#M0 = np.array([3.0e-10, 1.7e-9, 4.0e-9, 1.1e-8, 6.6e-8, 7.0e-7])  # [Msun/yr]
-#Mb = np.array([6.0e10, 9.0e10, 7.0e10, 5.0e10, 5.0e10, 6.0e10])   # [Msun]
-#Mc = np.array([1.0e12, 2.0e12, 2.0e12, 3.0e12, 2.0e12, 2.0e12])   # [Msun]
-#a = np.array([3.15, 2.9, 3.1, 3.1, 2.9, 2.5])
-#b = np.array([-1.7, -1.4, -2.0, -2.1, -2.0, -1.6])
-#c = np.array([-1.7, -2.1, -1.5, -1.5, -1.0, -1.0])
-## below Eq 11
-#Ma = 1.e8   # [Msun]
-## Eq 11
-#Sfr = M0 * (m/Ma)**a * (1.+m/Mb)**b * (1.+m/Mc)**c
-#
-## interpolate
-#sfr = interp1d(Z, Sfr, kind='linear', bounds_error=False, fill_value=0.)
-
 
 #####################################################################################
 # SFRD
@@ -145,84 +129,41 @@ fig.clf()
 
 
 #####################################################################################
-# Effective halo mass cutoff from SFR
+#####################################################################################
+# Effective mean halo number density, and number per voxel
 
 
-def haloMassIntegral(z, f=lambda m: 1., mMin=None):
+def haloMassIntegral(z, f=lambda m: 1., mMin=None, mMax=None):
    '''Compute int dm dn/dm f(m)  [(f unit) / (Mpc/h)^3]
    m [Msun/h]
    '''
    if mMin is None:
       mMin = massFunc.mMin
+   if mMax is None:
+      mMax = massFunc.mMax
 
    def integrand(lnm):
       m = np.exp(lnm)
       return m * massFunc.fmassfunc(m, 1./(1.+z)) * f(m)
-   result = integrate.quad(integrand, np.log(mMin), np.log(massFunc.mMax), epsabs=0., epsrel=1.e-3)[0]
+   result = integrate.quad(integrand, np.log(mMin), np.log(mMax), epsabs=0., epsrel=1.e-3)[0]
    return result
 
-
-def haloShotNoiseWindow(m, z, mMin=None):
-   '''m [Msun/h]
-   returns:
-   dn/dm * SFR(m)  /  int dm' dn/dm' SFR(m') [1/(Msun/h)]
+def nHaloEff(z, mMin=None, a1=1., a2=1.):
    '''
-   result = massFunc.fmassfunc(m, 1./(1.+z))
-   result *= sfr(m * u.bg.h, z)
-   result /= haloMassIntegral(z, lambda m: sfr(m * u.bg.h, z), mMin=mMin)
-   return result
-
-def dHaloShotNoisedM(m, z, mMin=None):
-   '''d(1/n_{h eff}) / dm  [1/(Msun/h)]
+   computes \bar{n}^{h eff}_{12} [1/(Mpc/h)^3]
+   for lines 1 and 2, such that 
+   L1 propto SFR^a1, L2 propto SFR^a2.
    m [Msun/h]
    '''
-   result = 1. / massFunc.fmassfunc(m, 1./(1.+z))
-   result *= haloShotNoiseWindow(m, z, mMin=mMin)**2
-   return result
-
-def nHaloEff(z, mMin=None):
-   '''
-   computes \bar{n}^{h eff} [1/(Mpc/h)^3]
-   m [Msun/h]
-   '''
-   result = haloMassIntegral(z, lambda m: sfr(m * u.bg.h, z), mMin=mMin)**2
-   result /= haloMassIntegral(z, lambda m: sfr(m * u.bg.h, z)**2, mMin=mMin)
+   result = haloMassIntegral(z, lambda m: sfr(m * u.bg.h, z)**a1, mMin=mMin)
+   result *= haloMassIntegral(z, lambda m: sfr(m * u.bg.h, z)**a2, mMin=mMin)
+   result /= haloMassIntegral(z, lambda m: sfr(m * u.bg.h, z)**(a1+a2), mMin=mMin)
    return result
 
 
 
-
-
-# Contributions of each halo mass to the 1-halo term
-M = np.logspace(np.log10(1.e8), np.log10(1.e16), 101, 10.) # masses in h^-1 solarM
-
-fig=plt.figure(0)
-ax=fig.add_subplot(111)
-#
-Z = np.linspace(0., 5., 6)
-for iZ in range(len(Z)):
-   z = Z[iZ]
-   f = lambda m: dHaloShotNoisedM(m, z)
-   dP1hdm = np.array(map(f, M))
-   ax.plot(M, M * dP1hdm, c=plt.cm.autumn_r(iZ/(len(Z)-1.)), label=r'$z=$'+str(int(z)))
-#
-ax.legend(loc=1, labelspacing=0.2)
-ax.set_xscale('log', nonposx='clip')
-ax.set_xlim((1.e10, 4.e14))
-ax.set_xlabel(r'halo mass $m$ [$M_\odot/h$]')
-ax.set_ylabel(r'$\frac{d}{d\text{ln} m}\left( \frac{1}{\bar{n}^\text{h eff}} \right) \propto \frac{dP^\text{1-halo}}{d\text{ln} m}$ [(Mpc/h)$^{-3}$]')
-#
-fig.savefig(pathFig+"dp1hdm.pdf", bbox_inches='tight')
-plt.show()
-fig.clf()
-
-
-
-
-#####################################################################################
-# Effective mean halo number density, and number per voxel
-
-Z = np.linspace(0., 5., 6)
+"""
+Z = np.array([0.001, 1., 2., 3., 4., 5.])
 
 # SPHEREx voxel size
 # the spectral resolution power is R=40 for the lower z, and 150 for the high z
@@ -230,49 +171,165 @@ R = 40.
 # hence the redshift size of the voxel
 dz = (1. + Z) / R
 # and the comoving depth of the voxel
-dChi = dz * 3.e5 / u.hubble(z)   # [Mpc/h]
+dChi = dz * 3.e5 / u.hubble(Z)   # [Mpc/h]
 # angular pixel size: 6.2 arcsec
 thetaPix = 6.2 * np.pi/(180.*3600.)
 # hence the voxel comoving volume
-vVoxSpherex = (u.bg.comoving_distance(z) * thetaPix)**2 * dChi  # [(Mpc/h)^3]
-
-
-# Effective number density of halos
-NHaloEff = np.array(map(nHaloEff, Z))
+vVoxSpherex = (u.bg.comoving_distance(Z) * thetaPix)**2 * dChi  # [(Mpc/h)^3]
 
 
 
-'''
+# range of reasonable scalings for L = SFR^alpha
+Alpha = [0.8, 1., 1.1]
+
+
+
 fig=plt.figure(0)
 ax=fig.add_subplot(111)
 #
-ax.plot(Z, NHaloEff)
+for alpha in Alpha:
+   f = lambda z: nHaloEff(z, a1=alpha, a2=alpha)
+   NHaloEff = np.array(map(f, Z))
+   ax.plot(Z, NHaloEff, label=r'$\alpha_i=\alpha_j=$'+str(alpha))
 #
+ax.legend(loc=2, labelspacing=0.2)
 #ax.set_yscale('log', nonposy='clip')
 ax.set_xlabel(r'$z$')
-ax.set_ylabel(r'$\bar{n}^\text{h eff}$ [(Mpc/h)$^3$]')
+ax.set_ylabel(r'$\bar{n}^\text{h eff}_{ij}$ [(Mpc/h)$^3$]')
 #
 fig.savefig(pathFig+"nheff.pdf", bbox_inches='tight')
 plt.show()
 fig.clf()
-'''
+
 
 
 fig=plt.figure(0)
 ax=fig.add_subplot(111)
 #
-#ax.plot(Z, vVoxSpherex)
-#ax.plot(Z, NHaloEff)
-ax.plot(Z, NHaloEff * vVoxSpherex)
+for alpha in Alpha:
+   f = lambda z: nHaloEff(z, a1=alpha, a2=alpha)
+   NHaloEff = np.array(map(f, Z))
+   #ax.plot(Z, vVoxSpherex)
+   #ax.plot(Z, NHaloEff)
+   ax.plot(Z, NHaloEff * vVoxSpherex, label=r'$\alpha_i=\alpha_j=$'+str(alpha))
 #
-ax.set_yscale('log', nonposy='clip')
+ax.legend(loc=2, labelspacing=0.2)
+#ax.set_yscale('log', nonposy='clip')
 ax.set_xlabel(r'$z$')
-ax.set_ylabel(r'$\bar{N}^\text{h eff}$ per SPHEREx voxel')
+ax.set_ylabel(r'$\bar{N}^\text{h eff}_{ij}$ per SPHEREx voxel')
 #
 fig.savefig(pathFig+"halo_sparsity_spherex.pdf", bbox_inches='tight')
 plt.show()
 fig.clf()
+"""
 
+
+#####################################################################################
+# Mmax dependence of the low k 1-halo term
+
+profNFW = ProfNFW(u)
+
+def fdP1hdlnm(m, z, mMin=None):
+   result =  m * massFunc.fmassfunc(m, 1./(1.+z))
+   result *= sfr(m * u.bg.h, z)**2
+   return result
+
+'''
+M = np.logspace(np.log10(1.e10), np.log10(2.e14), 101, 10.) # masses in h^-1 solarM
+
+Z = np.array([0.001, 1., 2., 3., 4., 5.])
+
+
+fig=plt.figure(0)
+ax=fig.add_subplot(111)
+#
+for iZ in range(len(Z)):
+   z = Z[iZ]
+   f = lambda m: fdP1hdlnm(m, z)
+   y = np.array(map(f, M))
+   ax.plot(M, y, c=plt.cm.autumn_r(iZ/(len(Z)-1.)), label=r'$z=$'+str(int(z)))
+#
+ax.legend(loc=1, fontsize='x-small', labelspacing=0.2)
+ax.set_xscale('log', nonposx='clip')
+ax.set_xlabel(r'Halo mass $m$ [$M_\odot/h$]')
+ax.set_ylabel(r'$\frac{dP^\text{1-halo}(k=0, \mu=0, z)}{d\text{ln} m} = m\ n(m)\ \text{SFR}(m)^2 $  [arbitrary unit]', fontsize=14)
+#
+fig.savefig(pathFig+"dp1hdm.pdf", bbox_inches='tight')
+plt.show()
+'''
+
+#####################################################################################
+# Mmax and k dependences of the 1-halo term
+
+
+
+def fP1h(k, z, mMin=None, mMax=None):
+   '''Assumes mu=0, ie no RSD.
+   '''
+   f = lambda m: sfr(m * u.bg.h, z)**2 * profNFW.nfw(k, m, z)**2
+   result = haloMassIntegral(z, f, mMin=mMin, mMax=mMax)
+   return result
+
+'''
+# Contributions of each halo mass to the 1-halo term
+MMax = np.logspace(np.log10(1.e12), np.log10(5.e13), 5, 10.) # masses in h^-1 solarM
+K = np.logspace(np.log10(1.e-3), np.log10(10.), 51, 10.)
+Z = [1., 2.]
+
+for z in Z:
+   fig=plt.figure(0)
+   ax=fig.add_subplot(111)
+   #
+   for iMMax in range(len(MMax))[::-1]:
+      mMax = MMax[iMMax]
+      f = lambda k: fP1h(k, z, mMax=mMax)
+      P1h = np.array(map(f, K))
+      print P1h
+      ax.plot(K, P1h, c=plt.cm.winter_r(iMMax/(len(MMax)-1.)), label=r'$M_\text{max}=$'+intExpForm(mMax, round=1)+r'$M_\odot$/h')
+   #
+   ax.legend(loc=3, fontsize='x-small', labelspacing=0.2)
+   ax.set_xscale('log', nonposx='clip')
+   ax.set_yscale('log', nonposy='clip')
+   #ax.set_xlim((1.e10, 4.e14))
+   ax.set_xlabel(r'$k$ [h/Mpc]')
+   ax.set_ylabel(r'$P^\text{1h}_{ij}(k, \mu=0, z='+str(int(z))+r')$ [arbitrary unit]')
+   #
+   fig.savefig(pathFig+"p1h_mmax_z"+str(int(z))+".pdf", bbox_inches='tight')
+   plt.show()
+   fig.clf()
+'''
+
+
+#####################################################################################
+# z dependence of the 1-halo term
+
+'''
+K = np.logspace(np.log10(1.e-3), np.log10(10.), 51, 10.)
+Z = np.array([0.001, 1., 2., 3., 4., 5.])
+
+
+fig=plt.figure(0)
+ax=fig.add_subplot(111)
+#
+for iZ in range(len(Z)):
+   z = Z[iZ]
+   f = lambda k: fP1h(k, z)
+   y = np.array(map(f, K))
+   ax.plot(K, y, c=plt.cm.autumn_r(iZ/(len(Z)-1.)), label=r'$z=$'+str(int(z)))
+#
+ax.legend(loc=3, fontsize='x-small', labelspacing=0.2)
+ax.set_xscale('log', nonposx='clip')
+ax.set_yscale('log', nonposy='clip')
+ax.set_xlabel(r'$k$ [h/Mpc]')
+ax.set_ylabel(r'$P^\text{1h}_{ij}(k, \mu=0, z)$ [arbitrary unit]')
+#
+fig.savefig(pathFig+"p1h.pdf", bbox_inches='tight')
+plt.show()
+'''
+
+
+#####################################################################################
+#####################################################################################
 
 
 
@@ -446,334 +503,6 @@ def luminosityOIII5007(m, z):
 
 #####################################################################################
 #####################################################################################
-# Halo mass and SFR scatter as a function of redshift
-'''
-
-def nHalo(z, mMin=None):
-   '''Mean number density of halos of all masses, at redshift z
-   nHalo(z) = int dm dn/dm [(Mpc/h)^{-3}]
-   '''
-   if mMin is None:
-      mMin = massFunc.mMin
-   
-   def f(lnM):
-      m = np.exp(lnM)
-      return m * massFunc.fmassfunc(m, 1./(1.+z))
-
-   result = integrate.quad(f, np.log(mMin), np.log(massFunc.mMax), epsabs=0., epsrel=1.e-3)[0]
-   return result
-
-
-def haloAverage(z, f=lambda m: 1., mMin=None, norm=True):
-   '''Compute int dm dn/dm f(m) / int dm dn/dm  [f unit]
-   '''
-   if mMin is None:
-      mMin = massFunc.mMin
-
-   def integrand(lnm):
-      m = np.exp(lnm)
-      return m * massFunc.fmassfunc(m, 1./(1.+z)) * f(m)
-   result = integrate.quad(integrand, np.log(mMin), np.log(massFunc.mMax), epsabs=0., epsrel=1.e-3)[0]
-   if norm:
-      result /= nHalo(z)
-   return result
-
-def meanHaloMass(z, mMin=None):
-   '''Mean mass of all halos
-   meanHaloMass(z) = <m> = int dm dn/dm m  /  nHalo(z)   [Msun/h]
-   '''
-   return haloAverage(z, lambda m: m, mMin=mMin)
-
-def meanHaloMassSquared(z, mMin=mMin):
-   '''Mean mass of all halos
-   meanHaloMassSquared(z) = <m^2> = int dm dn/dm m^2  /  nHalo(z)   [Msun/h]
-   '''
-   return haloAverage(z, lambda m: m**2, mMin=mMin)
-
-def relativeVarHaloMass(z, mMin=None):
-   '''Relative mass variance across halos
-   varHaloMass(z) = <m^2> / <m>^2 - 1. [dimless]
-   '''
-   result = meanHaloMassSquared(z, mMin) / meanHaloMass(z, mMin)**2 - 1.
-   return result
-
-def meanSfr(z, alpha=1, mMin=None):
-   '''Computes <SFR^alpha>,
-   where the average is over the halo mass function.
-   '''
-   return haloAverage(z, lambda m: sfr(m * u.bg.h, z)**alpha, mMin=mMin)
-
-
-def meanSfrSquared(z, mMin):
-   return haloAverage(z, lambda m: sfr(m * u.bg.h, z)**2, mMin=mMin)
-
-def relativeVarHaloSfr(z, mMin=None):
-   '''<SFR^2> / <SFR>^2, dimensionless.
-   '''
-   result = meanSfr(z, alpha=2, mMin=mMin) / meanSfr(z, mMin=mMin)**2 - 1.
-   return result
-
-
-
-def nHaloEff(z, mMin=None):
-   '''Effective mean number density of halos for the 1-halo term,
-   i.e. P1h = I_1I_2 / nHaloEff
-   '''
-   if mMin is None:
-      mMin = massFunc.mMin
-
-  result = meanSfr(z, alpha=2, mMin=mMin)
-  result /= meanSfr(z, alpha=1, mMin=mMin)**2
-  result /= nHalo(z, mMin=mMin)
-  return result
-
-
-
-
-
-
-#####################################################################################
-# Sparsity of halos
-
-
-# Evaluate all
-z = np.linspace(0., 5., 6)
-NHalo = np.array(map(nHalo, z))
-NHaloEff = np.array(map(nHaloEff, z))
-mMean = np.array(map(meanHaloMass, z))
-m2Mean = np.array(map(meanHaloMassSquared, z))
-sigma2HaloMass = np.array(map(relativeVarHaloMass, z))
-
-sfrMean = np.array(map(meanSfr, z))
-sfr2Mean = np.array(map(meanSfrSquared, z))
-sigma2HaloSfr = np.array(map(relativeVarHaloSfr, z))
-
-
-
-
-
-
-
-
-# Effective mass cutoff from SFR,
-# which determines which halo masses contribute
-# to the effective number density of halos
-fig=plt.figure(0)
-ax=fig.add_subplot(111)
-#
-ax.plot(z, sigma2HaloMass, 'k')
-#
-ax.legend(loc=1, fontsize='x-small', labelspacing=0.1)
-ax.set_xlabel(r'$z$')
-ax.set_ylabel(r'$<\text{SFR}>^2 / <\text{SFR}^2>$')
-ax.set_yscale('log', nonposy='clip')
-#
-fig.savefig(pathFig + "mass_cutoff_sfr.pdf", bbox_inches='tight')
-plt.show()
-fig.clf()
-
-
-
-
-
-# Effective mean number density of halos
-# which contribute to the 1-halo term
-fig=plt.figure(0)
-ax=fig.add_subplot(111)
-#
-ax.plot(z, NHaloEff, 'k', label=r'$\bar{n}_{h\text{ eff}}$')
-#
-ax.legend(loc=1, fontsize='x-small', labelspacing=0.1)
-ax.set_xlabel(r'$z$')
-ax.set_ylabel(r'$\bar{n}_{h\text{ eff}} (z)$ [(Mpc/h)$^{-3}$]')
-ax.set_yscale('log', nonposy='clip')
-#
-fig.savefig(pathFig + "nheff.pdf", bbox_inches='tight')
-plt.show()
-fig.clf()
-
-
-
-
-
-
-
-# mean halo number density
-# as a function of the minimum mass cut
-fig=plt.figure(0)
-ax=fig.add_subplot(111)
-#
-# mean number density of halos weighted by SFR
-f = lambda z: nHaloEff(z, mMin=None)
-y = array(map(f, z))
-ax.plot(z, y, 'k', label=r'$\bar{n}_h$')
-
-#
-# Mean number density of halos for each mMin cutoff
-nMMin = 5
-MMin = np.logspace(np.log10(1.e8), np.log10(1.e12), nMMin, 10.)
-for iMMin in range(nMMin):
-   mMin = MMin[iMMin]
-   f = lambda z: nHalo(z, mMin)
-   y = np.array(map(f, z))
-   ax.plot(z, y, c=plt.cm.autumn(iMMin/(nMMin-1.)), label=floatExpForm(mMin))
-#
-ax.legend(loc=1, fontsize='x-small', labelspacing=0.1)
-ax.set_xlabel(r'$z$')
-ax.set_ylabel(r'$\bar{n}_h (z)$ [(Mpc/h)$^{-3}$]')
-ax.set_yscale('log', nonposy='clip')
-#
-fig.savefig(pathFig + "nhalo.pdf", bbox_inches='tight')
-plt.show()
-fig.clf()
-
-
-
-
-
-# SPHEREx voxel size
-z = np.linspace(0., 5., 6)
-# the spectral resolution power is R=40 for the lower z, and 150 for the high z
-R = 40.
-# hence the redshift size of the voxel
-dz = (1. + z) / R
-# and the comoving depth of the voxel
-dChi = dz * 3.e5 / u.hubble(z)   # [Mpc/h]
-# angular pixel size: 6.2 arcsec
-thetaPix = 6.2 * np.pi/(180.*3600.)
-# hence the voxel comoving volume
-vVoxSpherex = (u.bg.comoving_distance(z) * thetaPix)**2 * dChi  # [(Mpc/h)^3]
-
-
-
-# SPHEREx: mean halo number per voxel
-# as a function of the minimum mass cut
-fig=plt.figure(0)
-ax=fig.add_subplot(111)
-#
-#
-nMMin = 5
-MMin = np.logspace(np.log10(1.e8), np.log10(1.e12), nMMin, 10.)
-for iMMin in range(nMMin):
-   mMin = MMin[iMMin]
-   f = lambda z: nHalo(z, mMin)
-   y = np.array(map(f, z))
-   ax.plot(z, y * vVoxSpherex, c=plt.cm.autumn(iMMin/(nMMin-1.)), label=floatExpForm(mMin))
-#
-ax.legend(loc=1, fontsize='x-small', labelspacing=0.1)
-ax.set_xlabel(r'$z$')
-ax.set_ylabel(r'$\bar{n}_h (z)$ [(Mpc/h)$^{-3}$]')
-ax.set_yscale('log', nonposy='clip')
-#
-fig.savefig(pathFig + "nhalo_voxel_spherex.pdf", bbox_inches='tight')
-plt.show()
-fig.clf()
-'''
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-'''
-# mean halo mass
-fig=plt.figure(0)
-ax=fig.add_subplot(111)
-#
-ax.plot(z, mMean)
-#
-ax.set_xlabel(r'$z$')
-ax.set_ylabel(r'$\langle m_h \rangle (z)$ [M$_\odot$/h]')
-ax.set_yscale('log', nonposy='clip')
-#
-fig.savefig(pathFig + "m_mean.pdf", bbox_inches='tight')
-plt.show()
-fig.clf()
-
-
-
-# mean squared halo mass
-fig=plt.figure(0)
-ax=fig.add_subplot(111)
-#
-ax.plot(z, m2Mean)
-#
-ax.set_xlabel(r'$z$')
-ax.set_ylabel(r'$\langle m_h^2 \rangle (z)$ [(M$_\odot$/h)$^2$]')
-ax.set_yscale('log', nonposy='clip')
-#
-fig.savefig(pathFig + "m2_mean.pdf", bbox_inches='tight')
-plt.show()
-fig.clf()
-
-
-
-# relative variance of halo mass
-fig=plt.figure(0)
-ax=fig.add_subplot(111)
-#
-ax.plot(z, sigma2HaloMass)
-#
-ax.set_xlabel(r'$z$')
-ax.set_ylabel(r'$\sigma^2_\text{halo mass} \equiv \langle m_h^2 \rangle / \langle m_h \rangle^2 - 1$')
-ax.set_yscale('log', nonposy='clip')
-#
-fig.savefig(pathFig + "sigma2_halo_mass.pdf", bbox_inches='tight')
-plt.show()
-fig.clf()
-
-
-# mean SFR
-fig=plt.figure(0)
-ax=fig.add_subplot(111)
-#
-ax.plot(z, sfrMean)
-#
-ax.set_xlabel(r'$z$')
-ax.set_ylabel(r'$\langle \text{SFR} \rangle (z)$ [M$_\odot$ / yr]')
-#
-fig.savefig(pathFig + "sfr_mean.pdf", bbox_inches='tight')
-plt.show()
-fig.clf()
-
-# mean squared SFR
-fig=plt.figure(0)
-ax=fig.add_subplot(111)
-#
-ax.plot(z, sfr2Mean)
-#
-ax.set_xlabel(r'$z$')
-ax.set_ylabel(r'$\langle \text{SFR}^2 \rangle (z)$ [(M$_\odot$ / yr)$^2$]')
-#
-fig.savefig(pathFig + "sfr2_mean.pdf", bbox_inches='tight')
-plt.show()
-fig.clf()
-
-# Relative variance of halo SFR
-fig=plt.figure(0)
-ax=fig.add_subplot(111)
-#
-ax.plot(z, sigma2HaloSfr)
-#
-ax.set_ylim((0., 1.1 * np.max(sigma2HaloSfr)))
-ax.set_xlabel(r'$z$')
-ax.set_ylabel(r'$\sigma^2_\text{halo SFR} \equiv \langle \text{SFR}^2 \rangle / \langle \text{SFR} \rangle^2 - 1$')
-#
-fig.savefig(pathFig + "sigma2_halo_sfr.pdf", bbox_inches='tight')
-plt.show()
-fig.clf()
-'''
 
 
 #####################################################################################

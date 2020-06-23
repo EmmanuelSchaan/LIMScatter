@@ -8,6 +8,10 @@ import mass_function
 reload(mass_function)
 from mass_function import *
 
+import profile
+reload(profile)
+from profile import *
+
 
 nProc = 4
 
@@ -22,9 +26,9 @@ if not os.path.exists(pathFig):
 
 u = UnivPlanck15()
 
-#massFunc = MassFuncPS(u, nProc=nProc, save=True)
-massFunc = MassFuncST(u, nProc=nProc, save=True)
-#massFunc = MassFuncTinker(u, nProc=nProc, save=True)
+#massFunc = MassFuncPS(u, nProc=nProc, save=False)
+massFunc = MassFuncST(u, nProc=nProc, save=False)
+#massFunc = MassFuncTinker(u, nProc=nProc, save=False)
 
 
 
@@ -34,9 +38,11 @@ massFunc = MassFuncST(u, nProc=nProc, save=True)
 
 #####################################################################################
 #####################################################################################
-# SPHEREx lines:
-#Ha, Hb, Lya, OIII 5007A
+# SFR, SFRD and effective halo mass cutoff
 
+
+#####################################################################################
+# SFR
 
 def sfr(m, z):
    ''' SFR [Msun/yr] as a function of halo mass [Msun] and redshift
@@ -74,26 +80,9 @@ def sfr(m, z):
 
 
 
-#''' SFR [Msun/yr] as a function of halo mass [Msun] and redshift
-#from Fonseca+16 (1607.05288v2), Eq 11.
-#I inferred the units from Eq 9 and 11.
-#'''
-## Table I 
-#Z = np.array([0., 1., 2., 3., 4., 5.])
-#M0 = np.array([3.0e-10, 1.7e-9, 4.0e-9, 1.1e-8, 6.6e-8, 7.0e-7])  # [Msun/yr]
-#Mb = np.array([6.0e10, 9.0e10, 7.0e10, 5.0e10, 5.0e10, 6.0e10])   # [Msun]
-#Mc = np.array([1.0e12, 2.0e12, 2.0e12, 3.0e12, 2.0e12, 2.0e12])   # [Msun]
-#a = np.array([3.15, 2.9, 3.1, 3.1, 2.9, 2.5])
-#b = np.array([-1.7, -1.4, -2.0, -2.1, -2.0, -1.6])
-#c = np.array([-1.7, -2.1, -1.5, -1.5, -1.0, -1.0])
-## below Eq 11
-#Ma = 1.e8   # [Msun]
-## Eq 11
-#Sfr = M0 * (m/Ma)**a * (1.+m/Mb)**b * (1.+m/Mc)**c
-#
-## interpolate
-#sfr = interp1d(Z, Sfr, kind='linear', bounds_error=False, fill_value=0.)
 
+#####################################################################################
+# SFRD
 
 def sfrd(z):
    '''SFR density:
@@ -139,10 +128,222 @@ fig.clf()
 '''
 
 
+#####################################################################################
+#####################################################################################
+# Effective mean halo number density, and number per voxel
+
+
+def haloMassIntegral(z, f=lambda m: 1., mMin=None, mMax=None):
+   '''Compute int dm dn/dm f(m)  [(f unit) / (Mpc/h)^3]
+   m [Msun/h]
+   '''
+   if mMin is None:
+      mMin = massFunc.mMin
+   if mMax is None:
+      mMax = massFunc.mMax
+
+   def integrand(lnm):
+      m = np.exp(lnm)
+      return m * massFunc.fmassfunc(m, 1./(1.+z)) * f(m)
+   result = integrate.quad(integrand, np.log(mMin), np.log(mMax), epsabs=0., epsrel=1.e-3)[0]
+   return result
+
+def nHaloEff(z, mMin=None, a1=1., a2=1.):
+   '''
+   computes \bar{n}^{h eff}_{12} [1/(Mpc/h)^3]
+   for lines 1 and 2, such that 
+   L1 propto SFR^a1, L2 propto SFR^a2.
+   m [Msun/h]
+   '''
+   result = haloMassIntegral(z, lambda m: sfr(m * u.bg.h, z)**a1, mMin=mMin)
+   result *= haloMassIntegral(z, lambda m: sfr(m * u.bg.h, z)**a2, mMin=mMin)
+   result /= haloMassIntegral(z, lambda m: sfr(m * u.bg.h, z)**(a1+a2), mMin=mMin)
+   return result
+
+
+
+"""
+Z = np.array([0.001, 1., 2., 3., 4., 5.])
+
+# SPHEREx voxel size
+# the spectral resolution power is R=40 for the lower z, and 150 for the high z
+R = 40.
+# hence the redshift size of the voxel
+dz = (1. + Z) / R
+# and the comoving depth of the voxel
+dChi = dz * 3.e5 / u.hubble(Z)   # [Mpc/h]
+# angular pixel size: 6.2 arcsec
+thetaPix = 6.2 * np.pi/(180.*3600.)
+# hence the voxel comoving volume
+vVoxSpherex = (u.bg.comoving_distance(Z) * thetaPix)**2 * dChi  # [(Mpc/h)^3]
+
+
+
+# range of reasonable scalings for L = SFR^alpha
+Alpha = [0.8, 1., 1.1]
+
+
+
+fig=plt.figure(0)
+ax=fig.add_subplot(111)
+#
+for alpha in Alpha:
+   f = lambda z: nHaloEff(z, a1=alpha, a2=alpha)
+   NHaloEff = np.array(map(f, Z))
+   ax.plot(Z, NHaloEff, label=r'$\alpha_i=\alpha_j=$'+str(alpha))
+#
+ax.legend(loc=2, labelspacing=0.2)
+#ax.set_yscale('log', nonposy='clip')
+ax.set_xlabel(r'$z$')
+ax.set_ylabel(r'$\bar{n}^\text{h eff}_{ij}$ [(Mpc/h)$^3$]')
+#
+fig.savefig(pathFig+"nheff.pdf", bbox_inches='tight')
+plt.show()
+fig.clf()
+
+
+
+fig=plt.figure(0)
+ax=fig.add_subplot(111)
+#
+for alpha in Alpha:
+   f = lambda z: nHaloEff(z, a1=alpha, a2=alpha)
+   NHaloEff = np.array(map(f, Z))
+   #ax.plot(Z, vVoxSpherex)
+   #ax.plot(Z, NHaloEff)
+   ax.plot(Z, NHaloEff * vVoxSpherex, label=r'$\alpha_i=\alpha_j=$'+str(alpha))
+#
+ax.legend(loc=2, labelspacing=0.2)
+#ax.set_yscale('log', nonposy='clip')
+ax.set_xlabel(r'$z$')
+ax.set_ylabel(r'$\bar{N}^\text{h eff}_{ij}$ per SPHEREx voxel')
+#
+fig.savefig(pathFig+"halo_sparsity_spherex.pdf", bbox_inches='tight')
+plt.show()
+fig.clf()
+"""
+
+
+#####################################################################################
+# Mmax dependence of the low k 1-halo term
+
+profNFW = ProfNFW(u)
+
+def fdP1hdlnm(m, z, mMin=None):
+   result =  m * massFunc.fmassfunc(m, 1./(1.+z))
+   result *= sfr(m * u.bg.h, z)**2
+   return result
+
+'''
+M = np.logspace(np.log10(1.e10), np.log10(2.e14), 101, 10.) # masses in h^-1 solarM
+
+Z = np.array([0.001, 1., 2., 3., 4., 5.])
+
+
+fig=plt.figure(0)
+ax=fig.add_subplot(111)
+#
+for iZ in range(len(Z)):
+   z = Z[iZ]
+   f = lambda m: fdP1hdlnm(m, z)
+   y = np.array(map(f, M))
+   ax.plot(M, y, c=plt.cm.autumn_r(iZ/(len(Z)-1.)), label=r'$z=$'+str(int(z)))
+#
+ax.legend(loc=1, fontsize='x-small', labelspacing=0.2)
+ax.set_xscale('log', nonposx='clip')
+ax.set_xlabel(r'Halo mass $m$ [$M_\odot/h$]')
+ax.set_ylabel(r'$\frac{dP^\text{1-halo}(k=0, \mu=0, z)}{d\text{ln} m} = m\ n(m)\ \text{SFR}(m)^2 $  [arbitrary unit]', fontsize=14)
+#
+fig.savefig(pathFig+"dp1hdm.pdf", bbox_inches='tight')
+plt.show()
+'''
+
+#####################################################################################
+# Mmax and k dependences of the 1-halo term
+
+
+
+def fP1h(k, z, mMin=None, mMax=None):
+   '''Assumes mu=0, ie no RSD.
+   '''
+   f = lambda m: sfr(m * u.bg.h, z)**2 * profNFW.nfw(k, m, z)**2
+   result = haloMassIntegral(z, f, mMin=mMin, mMax=mMax)
+   return result
+
+'''
+# Contributions of each halo mass to the 1-halo term
+MMax = np.logspace(np.log10(1.e12), np.log10(5.e13), 5, 10.) # masses in h^-1 solarM
+K = np.logspace(np.log10(1.e-3), np.log10(10.), 51, 10.)
+Z = [1., 2.]
+
+for z in Z:
+   fig=plt.figure(0)
+   ax=fig.add_subplot(111)
+   #
+   for iMMax in range(len(MMax))[::-1]:
+      mMax = MMax[iMMax]
+      f = lambda k: fP1h(k, z, mMax=mMax)
+      P1h = np.array(map(f, K))
+      print P1h
+      ax.plot(K, P1h, c=plt.cm.winter_r(iMMax/(len(MMax)-1.)), label=r'$M_\text{max}=$'+intExpForm(mMax, round=1)+r'$M_\odot$/h')
+   #
+   ax.legend(loc=3, fontsize='x-small', labelspacing=0.2)
+   ax.set_xscale('log', nonposx='clip')
+   ax.set_yscale('log', nonposy='clip')
+   #ax.set_xlim((1.e10, 4.e14))
+   ax.set_xlabel(r'$k$ [h/Mpc]')
+   ax.set_ylabel(r'$P^\text{1h}_{ij}(k, \mu=0, z='+str(int(z))+r')$ [arbitrary unit]')
+   #
+   fig.savefig(pathFig+"p1h_mmax_z"+str(int(z))+".pdf", bbox_inches='tight')
+   plt.show()
+   fig.clf()
+'''
+
+
+#####################################################################################
+# z dependence of the 1-halo term
+
+'''
+K = np.logspace(np.log10(1.e-3), np.log10(10.), 51, 10.)
+Z = np.array([0.001, 1., 2., 3., 4., 5.])
+
+
+fig=plt.figure(0)
+ax=fig.add_subplot(111)
+#
+for iZ in range(len(Z)):
+   z = Z[iZ]
+   f = lambda k: fP1h(k, z)
+   y = np.array(map(f, K))
+   ax.plot(K, y, c=plt.cm.autumn_r(iZ/(len(Z)-1.)), label=r'$z=$'+str(int(z)))
+#
+ax.legend(loc=3, fontsize='x-small', labelspacing=0.2)
+ax.set_xscale('log', nonposx='clip')
+ax.set_yscale('log', nonposy='clip')
+ax.set_xlabel(r'$k$ [h/Mpc]')
+ax.set_ylabel(r'$P^\text{1h}_{ij}(k, \mu=0, z)$ [arbitrary unit]')
+#
+fig.savefig(pathFig+"p1h.pdf", bbox_inches='tight')
+plt.show()
+'''
+
+
+#####################################################################################
+#####################################################################################
+
+
+
+
 
 
 
 #####################################################################################
+#####################################################################################
+# SPHEREx lines:
+#Ha, Hb, Lya, OIII 5007A
+
+
+
 #####################################################################################
 # Lyman-alpha 121.6 nm
 
@@ -303,7 +504,7 @@ def luminosityOIII5007(m, z):
 #####################################################################################
 #####################################################################################
 # Halo mass and SFR scatter as a function of redshift
-
+"""
 
 def nHalo(z, mMin=None):
    '''Mean number density of halos of all masses, at redshift z
@@ -524,7 +725,7 @@ ax.set_yscale('log', nonposy='clip')
 fig.savefig(pathFig + "nhalo_voxel_spherex.pdf", bbox_inches='tight')
 plt.show()
 fig.clf()
-
+"""
 
 
 
