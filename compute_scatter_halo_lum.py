@@ -302,7 +302,6 @@ for z in Z:
 
 #####################################################################################
 # z dependence of the 1-halo term
-
 '''
 K = np.logspace(np.log10(1.e-3), np.log10(10.), 51, 10.)
 Z = np.array([0.001, 1., 2., 3., 4., 5.])
@@ -540,31 +539,33 @@ gCOHigh = 1.
 lines = ['NII122', 'NIII58', 'CII158', 'COLow', 'COHigh']
 gamma = [1.01, 0.78, 1.02, 0.81, 1.]
 
-z = np.linspace(0., 5., 6)
-s2ijh = np.zeros((len(lines), len(lines), len(Z)))
+Z = np.linspace(0., 5., 6)
+#s2ijh = np.zeros((len(lines), len(lines), len(Z)))
 rijh = np.zeros((len(lines), len(lines), len(Z)))
 
 
 
-# compute the covariance matrix
-# of the halo line luminosities
+
+
 for iLine1 in range(len(lines)):
    g1 = gamma[iLine1]
    for iLine2 in range(len(lines)):
       g2 = gamma[iLine2]
 
-      f = lambda z: meanSfr(z, alpha=g1+g2) / meanSfr(z, alpha=g1) / meanSfr(z, alpha=g2) - 1.
-      s2ijh[iLine1, iLine2, :] = np.array(map(f, Z))
+      def f(z):
+         #result = np.sqrt(nHaloEff(z, a1=g1, a2=g1) * nHaloEff(z, a1=g2, a2=g2))
+         #result /= nHaloEff(z, a1=g1, a2=g2)
+
+         result = haloMassIntegral(z, lambda m: sfr(m * u.bg.h, z)**(g1+g2)) 
+         #print 1, result
+         result /= np.sqrt(haloMassIntegral(z, lambda m: sfr(m * u.bg.h, z)**(2.*g1)))
+         #print 1, result
+         result /= np.sqrt(haloMassIntegral(z, lambda m: sfr(m * u.bg.h, z)**(2.*g2))) 
+         return result
+      rijh[iLine1, iLine2, :] = np.array(map(f, Z))
 
 
-# compute correlation coefficient
-# of the halo line luminosities
-for iZ in range(len(Z)):
-   s = np.sqrt(np.diag(s2ijh[:,:,iZ]))
-   rijh[:,:,iZ] = s2ijh[:,:,iZ] / np.outer(s,s)
-
-
-fig=plt.figure(0)
+fig=plt.figure(0, figsize=(7,5))
 ax=fig.add_subplot(111)
 #
 for iLine1 in range(len(lines)):
@@ -573,12 +574,37 @@ for iLine1 in range(len(lines)):
       line2 = lines[iLine2]
       ax.plot(Z, rijh[iLine1, iLine2], label=line1+', '+line2)
 #
-ax.legend(loc=3, fontsize='x-small', labelspacing=0.1, handlelength=0.1, ncol=2)
+ax.legend(loc=3, fontsize='x-small', labelspacing=0.1, handlelength=0.2, ncol=2, frameon=False)
 ax.set_ylim((0.92, 1.001))
+ax.set_xlabel(r'$z$')
+ax.set_ylabel(r'$r_{i,j}^\text{1h}(k\rightarrow 0, \mu, z)$')
+ax.set_title(r'Line decorrelation in the 1-halo regime')
 fig.savefig(pathFig+"rijh.pdf", bbox_inches='tight')
 
 plt.show()
 '''
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

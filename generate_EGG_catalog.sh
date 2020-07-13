@@ -7,9 +7,11 @@
 #egg-gencat verbose maglim=27 selection_band=hst-f160w area=0.08 out=./output/EGG/catalog_EGG.fits ascii
 
 # Selection relevant for LIM
-#egg-gencat verbose area=10. mmin=9 mmax=13 zmin=0.05 zmax=10 out=./output/EGG/catalog_EGG_LIM.fits
-# remove unwanted output which make the file too big
-egg-gencat verbose area=10. mmin=9 mmax=13 zmin=0.05 zmax=10 no_pos no_clust out=./output/EGG/catalog_EGG_LIM.fits
+# remove unwanted output positions to reduce file size
+# area=2 sq deg is probably sufficient to have enough galaxies,
+# since all we want is mean and variance of the luminosities
+# keep the default redshift range z=0.05-10.5
+egg-gencat verbose area=1. mmin=8 mmax=14 zmin=0.05 zmax=10. no_pos no_clust out=./output/EGG/catalog_EGG_LIM.fits
 
 
 ## For visualization with SkyMaker
