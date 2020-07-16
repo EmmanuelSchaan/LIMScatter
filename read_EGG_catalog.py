@@ -13,9 +13,12 @@ plot = False
 
 pathCat = "./output/EGG/catalog_EGG_LIM.fits"
 pathFig = "./figures/EGG/"
+pathOut = "./output/EGG_results/"
 
 if not os.path.exists(pathFig):
-   osmakedirs(pathFig)
+   os.makedirs(pathFig)
+if not os.path.exists(pathOut):
+   os.makedirs(pathOut)
 
 
 # Read the catalog in memory
@@ -32,6 +35,12 @@ nBins = 51
 
 
 #####################################################################################
+# Save line names
+
+np.savetxt(pathOut + "line_names.txt", cat['lines'], delimiter=" ", newline = "\n", fmt="%s")
+
+
+#####################################################################################
 # Explore basic properties
 '''
 # Redshifts
@@ -44,7 +53,7 @@ myHistogram(cat['m'], nBins=101, lim=None, S2Theory=[], path=pathFig+'log10mstel
 #####################################################################################
 
 # Define redshift bins
-nZE = 101
+nZE = 11
 nZC = nZE-1
 # z bin edges
 zE = np.linspace(np.min(cat['z']), np.max(cat['z']), nZE)
@@ -79,6 +88,15 @@ nGal = zBinCounts / comovVolume
 # Poisson uncertainty on the galaxy number density
 snGal = np.sqrt(zBinCounts) / comovVolume
 
+
+# save to file
+data = np.zeros((nZC, 3))
+data[:,0] = zC
+data[:,1] = nGal
+data[:,2] = snGal
+np.savetxt(pathOut + "ngal.txt", data)
+
+
 '''
 # Plot galaxy number density
 fig=plt.figure(0)
@@ -92,13 +110,14 @@ ax.set_xlabel(r'$z$')
 ax.set_ylabel(r'$\bar{n}_\text{gal}$ [(Mpc/h)$^{-3}$]')
 #
 fig.savefig(pathFig+'ngal_z.pdf', bbox_inches='tight')
-#plt.show()
+plt.show()
 plt.clf()
 '''
 
 
 #####################################################################################
-# Total galaxy luminosity per unit comoving volume
+# Mean galaxy luminosity and
+# total galaxy luminosity density per unit comoving volume
 
 meanLum = np.zeros((nLines, nZC))
 sMeanLum = np.zeros((nLines, nZC))
@@ -115,12 +134,17 @@ for iLine in range(nLines):
    sLumDensity[iLine,:], _, _ = stats.binned_statistic(cat['z'], cat['line_lum'][:,iLine], statistic='std', bins=zE)
    sLumDensity[iLine,:] *= np.sqrt(zBinCounts)
 
+
 lumDensity /= comovVolume
 sLumDensity /= comovVolume
-   
+
+# save to file
+np.savetxt(pathOut + "mean_gal_lum.txt", meanLum)
+np.savetxt(pathOut + "total_gal_lum_density.txt", meanLum)
+
 '''
 # Plot luminosity density
-fig=plt.figure(0)
+fig=plt.figure(0, figsize=(10,8))
 ax=fig.add_subplot(111)
 #
 for iLine in range(nLines):
@@ -130,17 +154,19 @@ for iLine in range(nLines):
 ax.legend(loc=1, fontsize='x-small', labelspacing=0.1)
 ax.set_yscale('log', nonposy='clip')
 ax.set_xlabel(r'$z$')
-ax.set_ylabel(r'Mean gal. lum. $\bar{L}_j$ [$L_\odot$]')
+ax.set_ylabel(r'$\bar{L}_j^\text{gal}$ [$L_\odot$]')
+ax.set_title(r'Mean galaxy luminosity')
+#plt.tight_layout()
 #
 fig.savefig(pathFig+'mean_gal_lum_z.pdf', bbox_inches='tight')
-#plt.show()
+plt.show()
 plt.clf()
 '''
 
 
 '''
 # Plot luminosity density
-fig=plt.figure(0)
+fig=plt.figure(0, figsize=(10,8))
 ax=fig.add_subplot(111)
 #
 for iLine in range(nLines):
@@ -153,12 +179,131 @@ for iLine in range(nLines):
 ax.legend(loc=1, fontsize='x-small', labelspacing=0.1)
 ax.set_yscale('log', nonposy='clip')
 ax.set_xlabel(r'$z$')
-ax.set_ylabel(r'Luminosity density $\mathcal{L}_j$ [$L_\odot$ (Mpc/h)$^{-3}$]')
+ax.set_ylabel(r'$\mathcal{L}_j$ [$L_\odot$ (Mpc/h)$^{-3}$]')
+ax.set_title(r'Luminosity density')
 #
 fig.savefig(pathFig+'luminosity_density_z.pdf', bbox_inches='tight')
 #plt.show()
 plt.clf()
 '''
+
+
+#####################################################################################
+# Covariance of the different line luminosities
+# at each redshift
+
+meanLineLum = np.zeros((nZC, nLines))
+s2ij = np.zeros((nZC, nLines, nLines))   # s2ij = cov(Li,Lj)/Li/Lj
+rij = np.zeros((nZC, nLines, nLines)) # correlation coefficient
+
+
+for iZ in range(nZC):
+   z = zC[iZ]
+
+   for iLine1 in range(nLines):
+      line1 = cat['lines'][iLine1]
+      line1Lum = cat['line_lum'][:,iLine1]
+      line1Lum = line1Lum[np.where((zE[iZ]<=cat['z'])*(cat['z']<zE[iZ+1]))]
+
+      meanLineLum[iZ, iLine1] = np.mean(line1Lum)
+
+      for iLine2 in range(0, iLine1+1):
+         line2 = cat['lines'][iLine2]
+         line2Lum = cat['line_lum'][:,iLine2]
+         line2Lum = line2Lum[np.where((zE[iZ]<=cat['z'])*(cat['z']<zE[iZ+1]))]
+
+         # compute cov and corr coeff
+         s2ij[iZ, iLine1, iLine2] = np.cov(np.vstack((line1Lum, line2Lum)))[0,1] / np.mean(line1Lum) / np.mean(line2Lum)
+         rij[iZ, iLine1, iLine2] = np.corrcoef(line1Lum, line2Lum)[0,1]
+
+
+
+   # plot correlation matrix
+   fig=plt.figure(0, figsize=(18,12))
+   ax=fig.add_subplot(111)
+   #
+   mask = np.triu(np.ones((nLines, nLines)), k=1)
+   sns.heatmap(rij[iZ,:,:], annot=True, mask=mask, cbar=False)
+   ax.set_xticklabels(cat['lines'].replace('_', ' '), rotation=45)
+   ax.set_yticklabels(cat['lines'].replace('_', ' '), rotation=0)
+   #
+   path = pathFig + "rij_z"+floatExpForm(zC[iZ], round=2)+".pdf"
+   fig.savefig(path, bbox_inches='tight')
+   #plt.show()
+   fig.clf()
+
+   # plot relative cov matrix
+   fig=plt.figure(0, figsize=(26,14))
+   ax=fig.add_subplot(111)
+   #
+   mask = np.triu(np.ones((nLines, nLines)), k=1)
+   sns.heatmap(s2ij[iZ,:,:], annot=True, mask=mask, cbar=False)
+   ax.set_xticklabels(cat['lines'].replace('_', ' '), rotation=45)
+   ax.set_yticklabels(cat['lines'].replace('_', ' '), rotation=0)
+   #
+   path = pathFig + "s2ij_z"+floatExpForm(zC[iZ], round=2)+".pdf"
+   fig.savefig(path, bbox_inches='tight')
+   fig.clf()
+   #plt.show()
+
+
+
+# convert to 2d array then save to file
+np.savetxt(pathOut + "s2ij.txt", s2ij.flatten())
+np.savetxt(pathOut + "rij.txt", rij.flatten())
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#####################################################################################
+# Exact ngaleff for the shot noise auto-spectra
+'''
+nGalEffAuto = np.zeros((nLines, nZC))
+for iLine in range(nLines):
+   summedSquaredLum, _, _ = stats.binned_statistic(cat['z'], cat['line_lum'][:,iLine]**2, statistic='sum', bins=zE)
+   summedLum, _, _ = stats.binned_statistic(cat['z'], cat['line_lum'][:,iLine], statistic='sum', bins=zE)
+   nGalEffAuto[iLine,:] = summedLum**2 / summedSquaredLum / comovVolume
+'''
+'''
+fig=plt.figure(0)
+ax=fig.add_subplot(111)
+#
+for iLine in range(nLines):
+   ax.semilogy(zC, nGalEffAuto[iLine,:], label=cat['lines'][iLine].replace('_', ' '))
+#
+ax.legend(loc=1, fontsize='x-small', labelspacing=0.1)
+ax.set_yscale('log', nonposy='clip')
+ax.set_xlabel(r'$z$')
+ax.set_ylabel(r'$\bar{n}^\text{gal eff}_{ii}$ [(Mpc/h)$^{-3}$]')
+#
+fig.savefig(pathFig+'ngeff_auto_z.pdf', bbox_inches='tight')
+#plt.show()
+plt.clf()
+'''
+
+
+
+
+#####################################################################################
+#####################################################################################
+# Average over all redshifts:
+# line mean, cov and corr coeff
 
 #####################################################################################
 # look at scatter: log-normal?
@@ -176,13 +321,8 @@ for iLine1 in range(nLines):
       myHistogram(np.log10(line1Lum), nBins=nBins, lim=None, S2Theory=[], path=pathFig+'hist_log10_'+line1+'.pdf', plot=False, nameLatex=r'log$_{10}$('+line1.replace('_',' ')+r')', semilogx=False, semilogy=False, doGauss=True)
 '''
 
-
 #####################################################################################
-#####################################################################################
-# Average over all redshifts:
-# line mean, cov and corr coeff
-
-
+'''
 meanLineLum = np.zeros(nLines)
 s2ij = np.zeros((nLines, nLines))   # s2ij = cov(Li,Lj)/Li/Lj
 rij = np.zeros((nLines, nLines)) # correlation coefficient
@@ -207,7 +347,7 @@ for iLine1 in range(nLines):
       s2ijlog[iLine1, iLine2] = np.cov(np.vstack((np.log10(line1Lum), np.log10(line2Lum))))[0,1] / np.mean(np.log10(line1Lum)) / np.mean(np.log10(line2Lum))
       rijlog[iLine1, iLine2] = np.corrcoef(np.log10(line1Lum), np.log10(line2Lum))[0,1]
       
-      '''
+      
       if (iLine1<>iLine2):
          fig=plt.figure(0)
          ax=fig.add_subplot(111)
@@ -222,7 +362,7 @@ for iLine1 in range(nLines):
          fig.savefig(pathFig+"scatterplot_"+line1+"_"+line2+".pdf", bbox_inches='tight')
          fig.clf()
          #plt.show()
-      '''
+      
 
 # Save matrix of cov and corr coeff
 path = pathFig + "s2ij.txt"
@@ -240,6 +380,7 @@ np.savetxt(path, np.round(s2ijlog.T, 2), fmt='%.2f', header=header)
 path = pathFig + "rijlog10.txt"
 header = "rijlog, correlation coefficient of the log10 of line luminosities\n" + ', '.join(cat['lines'])
 np.savetxt(path, np.round(rijlog.T, 2), fmt='%.2f', header=header)
+'''
 
 '''
 # plot correlation matrix
@@ -300,30 +441,29 @@ fig.clf()
 '''
 
 #####################################################################################
-#####################################################################################
 # Approximate effective number density of galaxies
 # for auto-correlations
-
-
-nGalEffAuto = np.zeros((nLines, nZC))
+'''
+nGalEffAutoApprox = np.zeros((nLines, nZC))
 for iLine in range(nLines):
-   nGalEffAuto[iLine,:] = nGal / (1. + s2ij[iLine, iLine])
-
+   nGalEffAutoApprox[iLine,:] = nGal / (1. + s2ij[iLine, iLine])
+'''
+'''
 fig=plt.figure(0)
 ax=fig.add_subplot(111)
 #
 for iLine in range(nLines):
-   ax.semilogy(zC, nGalEffAuto[iLine,:], label=cat['lines'][iLine].replace('_', ' '))
+   ax.semilogy(zC, nGalEffAutoApprox[iLine,:], label=cat['lines'][iLine].replace('_', ' '))
 #
 ax.legend(loc=1, fontsize='x-small', labelspacing=0.1)
 ax.set_yscale('log', nonposy='clip')
 ax.set_xlabel(r'$z$')
-ax.set_ylabel(r'$\bar{n}_\text{gal}(z) / (1 + \sigma^2_{\text{gal }ij})$')
+ax.set_ylabel(r'$\bar{n}_\text{gal}(z) / (1 + \sigma^2_{\text{gal }ii})$ [(Mpc/h)$^{-3}$]')
 #
 fig.savefig(pathFig+'approx_ngeff_auto_z.pdf', bbox_inches='tight')
-#plt.show()
+plt.show()
 plt.clf()
-
+'''
 
 
 
