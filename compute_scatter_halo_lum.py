@@ -103,7 +103,7 @@ def sfrd(z):
 def sfrdBehroozi13(z):
   return 0.180 / (10.**(-0.997*(z-1.243)) + 10.**(0.241*(z-1.243))) 
 
-'''
+
 # SFRD
 fig=plt.figure(0)
 ax=fig.add_subplot(111)
@@ -125,7 +125,7 @@ ax.set_ylabel(r'log$_10$(SFRD$(z)$/[M$_\odot$ / yr / Mpc$^3$])')
 fig.savefig(pathFig + "sfrd.pdf", bbox_inches='tight')
 plt.show()
 fig.clf()
-'''
+
 
 
 #####################################################################################
