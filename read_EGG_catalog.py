@@ -29,6 +29,10 @@ cat = pycolfits.readfrom(pathCat, lower_case=True)
 #cat['sfr'], cat['sfruv'], cat['sfrir'] # various SFR?
 #cat['lines']  # line names
 
+linesLatex = np.array([r'C{\sc ii} 157', r'N{\sc ii} 205', r'C{\sc i} 609', r'CO-10', r'CO-21', r'CO-32', r'CO-43',
+           r'CO-54', r'cCO-65', r'CO-76', r'H$\alpha$', r'H$\beta$', r'H$\gamma$', r'H$\delta$',
+           r'N{\sc ii} 6583', r'N{\sc ii} 6548', r'O{\sc iii} 5007', r'O{\sc iii} 4959', r'O{\sc ii} 3727',
+           r'Ly$\alpha$'])
 
 nLines = len(cat['lines'])
 nBins = 51
@@ -244,15 +248,17 @@ for iZ in range(nZC):
          rij[iZ, iLine1, iLine2] = np.corrcoef(line1Lum, line2Lum)[0,1]
 
 
-'''
+
    # plot correlation matrix
    fig=plt.figure(0, figsize=(18,12))
    ax=fig.add_subplot(111)
    #
    mask = np.triu(np.ones((nLines, nLines)), k=1)
-   sns.heatmap(rij[iZ,:,:], annot=True, mask=mask, cbar=False)
-   ax.set_xticklabels(cat['lines'].replace('_', ' '), rotation=45)
-   ax.set_yticklabels(cat['lines'].replace('_', ' '), rotation=0)
+   sns.heatmap(rij[iZ,:,:], annot=True, mask=mask, cbar=False, cmap='Blues')#'mako', vmin=-0.5, vmax=1.)
+   #ax.set_xticklabels(cat['lines'].replace('_', ' '), rotation=45)
+   #ax.set_yticklabels(cat['lines'].replace('_', ' '), rotation=45)
+   ax.set_xticklabels(linesLatex, rotation=45)
+   ax.set_yticklabels(linesLatex, rotation=45)
    #
    path = pathFig + "rij_z"+floatExpForm(zC[iZ], round=2)+".pdf"
    fig.savefig(path, bbox_inches='tight')
@@ -272,7 +278,7 @@ for iZ in range(nZC):
    fig.savefig(path, bbox_inches='tight')
    fig.clf()
    #plt.show()
-'''
+
 
 
 # convert to 2d array then save to file
@@ -401,7 +407,7 @@ for iZ in range(nZC):
       LogLF[iLine1,iZ,:] /= dLog10L
 
 
-
+'''
 # Plot line luminosity functions
 #for iLine1 in range(nLines):
 for iLine1 in [10]:
@@ -419,8 +425,9 @@ for iLine1 in [10]:
    ax.set_title(r'EGG '+cat['lines'][iLine1]+' line luminosity functions')
 
    plt.show()
+'''
 
-
+'''
 # Same, but comparing with Schreiber+in prep, fig A4
 #for iLine1 in range(nLines):
 for iLine1 in [10]:
@@ -440,9 +447,9 @@ for iLine1 in [10]:
    ax.set_title(r'EGG '+cat['lines'][iLine1]+' line luminosity functions')
 
    plt.show()
+'''
 
-
-
+'''
 # Same, but comparing with fig1 in Gong+17
 #for iLine1 in range(nLines):
 for iLine1 in [10]:
@@ -464,7 +471,7 @@ for iLine1 in [10]:
    ax.set_title(r'EGG '+cat['lines'][iLine1]+' line luminosity functions')
 
    plt.show()
-
+'''
 
 
 
