@@ -14,6 +14,7 @@ if not os.path.exists(pathFig):
 #######################################################################
 
 lines = np.array(['CII158', 'NII122', 'OI63', 'OIII88'])
+linesLatex = np.array([r'C{\sc ii}158', r'N{\sc ii}122', r'O{\sc i}63', r'O{\sc iii}88'])
 nLines = len(lines)
 
 nGal = 300  # needs to be at least as large as the number of galaxies
@@ -316,7 +317,7 @@ if plot:
    #
    sns.heatmap(rij.T, annot=True)
    ax.set_xticklabels(lines, rotation=45)
-   ax.set_yticklabels(lines)
+   ax.set_yticklabels(lines, rotation=45)
    #
    path = pathFig + "rij.pdf"
    fig.savefig(path, bbox_inches='tight')
@@ -417,15 +418,15 @@ header = "rij, correlation coefficient of line luminosities\n" + ', '.join(lines
 np.savetxt(path, np.round(rij.T, 2), fmt='%.2f', header=header)
 
 
-if plot:
+if True:
    # plot correlation matrix
    fig=plt.figure(0, figsize=(14,10))
    ax=fig.add_subplot(111)
    #
    mask = np.triu(np.ones((nLines, nLines)), k=1)
    sns.heatmap(rij, annot=True, mask=mask, cbar=False)
-   ax.set_xticklabels(lines, rotation=45)
-   ax.set_yticklabels(lines)
+   ax.set_xticklabels(linesLatex, rotation=45)
+   ax.set_yticklabels(linesLatex, rotation=45)
    #
    path = pathFig + "rij_lum.pdf"
    fig.savefig(path, bbox_inches='tight')
